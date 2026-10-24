@@ -1,0 +1,21 @@
+[versions]
+# Provisional pins — docs/setup.md §4.2 marks the exact set as an open [VERIFY].
+# This coherent set satisfies the 1.2.1-era minimums (Kotlin 1.7.0+, AGP 7.0+, Gradle 7.0+, Java 17+)
+# and supports compileSdk 36. Record any change back into docs/setup.md with a [verified: …] note.
+agp = "8.9.2"                 # supports compileSdk 36
+gradle = "8.11.1"             # AGP 8.9's minimum compatible Gradle
+kotlin = "1.9.24"             # KSP era still API v1 — matches the 1.2.1-era processor
+ksp = "1.9.24-1.0.20"         # one-to-one with the Kotlin version (release: google/ksp)
+xposed = "82"                 # de.robv.android.xposed:api:82
+yukihook = "1.2.1"            # spec §8.1, preserved verbatim — api and ksp-xposed MUST match
+jvm = "17"
+
+[libraries]
+xposed-api = { module = "de.robv.android.xposed:api", version.ref = "xposed" }
+yukihook-api = { module = "com.highcapable.yukihookapi:api", version.ref = "yukihook" }
+yukihook-ksp = { module = "com.highcapable.yukihookapi:ksp-xposed", version.ref = "yukihook" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

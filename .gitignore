@@ -1,0 +1,27 @@
+# Gradle / IDE
+.gradle/
+**/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+.cxx/
+captures/
+
+# OS cruft
+.DS_Store
+*.log
+
+# direnv / Nix
+.direnv/
+.envrc.local
+
+# YukiHook generated files — never hand-written, never committed (setup §4.5)
+**/assets/xposed_init
+**/resources/META-INF/yukihookapi_init
+
+# QA dumps are big; commit artifacts into fixes/*/evidence/ or assets/qa/ deliberately instead
+*.txt
+!tools/**/*.txt
+!fixes/**/evidence/**
+!fixes/**/*.md
