@@ -331,6 +331,19 @@ adb logcat -d -b crash | grep -i systemui
 # Toggle the feature live
 adb shell settings put system nothing_atmosphere_unlock_enabled 1
 adb shell settings put system nothing_atmosphere_unlock_enabled 0
+
+# Selection-surface knobs (spec §8.8; defaults in parentheses). Reads need no grant.
+# Writes via adb need no WRITE_SETTINGS; on the Atmosphere screen they need the grant.
+# Values clamp on the hook side before they reach the engine — see the §8.8 table.
+adb shell settings put system nothing_atmosphere_peak_radius 150        # (110; 1–300)
+adb shell settings put system nothing_atmosphere_settled_radius 40      # (28; 1–100)
+adb shell settings put system nothing_atmosphere_unlock_duration_ms 720 # (720; 100–2000)
+adb shell settings put system nothing_atmosphere_lock_duration_ms 450   # (450; 100–2000)
+adb shell settings put system nothing_atmosphere_mesh_strength 1.00     # (1.00 stored as string; 0.00–2.00)
+adb shell settings put system nothing_atmosphere_easing_preset 0        # (0; only 0 resolves — others fail open)
+
+# Read a knob back (all keys are plain strings in the settings provider)
+adb shell settings get system nothing_atmosphere_peak_radius
 ```
 
 **Disable a module / revert the overlay**

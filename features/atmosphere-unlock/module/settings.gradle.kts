@@ -23,8 +23,16 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://api.xposed.info/") {
-            content { includeGroup("de.robv.android.xposed") } // required as an Xposed module
+        // One artifact only: de.robv.android.xposed:api:82 (compile-time XposedBridge stub).
+        // The official https://api.xposed.info/ repo is dead as of 2026-10-25 (its DNS resolves
+        // to an unrelated IP and connections time out); mvnrepository lists Appodeal's public
+        // Artifactory as the live host for this exact artifact (api-82.jar/pom).
+        maven("https://artifactory.appodeal.com/appodeal-public/") {
+            content { includeGroup("de.robv.android.xposed") }
+        }
+        // JitPack serves com.github.tiann:FreeReflection, a YukiHookAPI 1.2.1 transitive dep.
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.tiann") }
         }
     }
 }

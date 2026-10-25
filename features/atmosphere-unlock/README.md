@@ -6,7 +6,7 @@ risks): `docs/engineering_specification.md` (§7 = engine, §8 = Stage-1 module,
 
 | Folder | State | Content |
 | --- | --- | --- |
-| `module/` | **Active (Stage 1)** | Android Gradle project (`:app`), package `dev.pong.evo.atmosphere`, YukiHookAPI 1.2.1; hot-reload tested, no reboot |
+| `module/` | **Active (Stage 1)** | Android Gradle project (`:app`), package `dev.pong.evo.atmosphere`, YukiHookAPI 1.2.1; up-to-date with the spec — `./gradlew assembleDebug` green; device verification pending (2026-10-25). Implementation record + deltas: [`note.md`](./note.md) |
 | `engine/` | empty (promotion pending) | Canonical engine copy lands here later — promoted from `module/app/src/main/java/com/android/systemui/nothing/atmosphere/` per setup §4.4, shared via Gradle source-sets. One copy, never dual-maintained |
 | `systemui/` | deferred (Stage 2) | Java wiring inside EvoX `frameworks/base` — only after the ops §3/§4 gates |
 | `evolver/` | deferred (Stage 2) | Evolver XML switches writing `Settings.System` keys |

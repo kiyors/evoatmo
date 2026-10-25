@@ -205,12 +205,13 @@ import android.animation.ValueAnimator
 import android.app.WallpaperColors
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.HardwareRenderer
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Surface
 import android.view.View
@@ -227,7 +228,8 @@ import kotlin.random.Random
 class NothingAtmosphereEngine {
 
     companion object {
-        /** Peak Gaussian radius during the unlock transition. Auto-tuned down by the present-time guard. */
+        /** Peak Gaussian radius during the unlock transition. Auto-tuned down by the
+         *  present-time guard. */
         var peakBlurRadius = 110f
 
         /** Radius kept alive while settled on the home screen (idle GPU cost guard).
@@ -235,6 +237,14 @@ class NothingAtmosphereEngine {
          *  selection-surface decision opened it — must stay clamped; the idle-cost guard
          *  itself is unchanged (host reads the key and clamps before pushing). */
         var settledBlurRadius = 28f
+
+        /**
+         * Multiplier applied to the WallpaperColors mesh mix before it enters the shader
+         * (spec §8.8 knob `nothing_atmosphere_mesh_strength`). 1f = the engine default
+         * mix; 0f disables it; values > 1f exaggerate. The mesh gate inside the AGSL
+         * source still keys off the (scaled) uniform, so an invalid palette stays off.
+         */
+        var meshStrengthScale = 1f
 
         private const val TAG = "EvoAtmo"
     }
@@ -261,9 +271,12 @@ class NothingAtmosphereEngine {
 
     // ---- WallpaperColors-driven mesh palette ----
     private var palette: List<FloatArray> = emptyList()   // each = [r,g,b] in 0..1
-    private var meshStrength = 0f                          // 0 = palette invalid → shader skips mesh mix
+    private var meshStrength = 0f   // 0 = palette invalid → shader skips the mesh mix
 
     // ---- Transition state ----
+
+    /** Current morph fraction (0 = sharp/locked, 1 = fully settled), driven by the
+     *  surface animator; hook hosts re-render with this value on their draw path (V5). */
     var currentFraction: Float = 0f
         private set
 
@@ -357,18 +370,47 @@ class NothingAtmosphereEngine {
         )
     }
 
-    /** Feed once per wallpaper change. Null/empty palette disables the mesh mix. */
+    /**
+     * Feed once per wallpaper change. Reads the public WallpaperColors surface —
+     * getPrimaryColor/getSecondaryColor/getTertiaryColor, each returning an
+     * android.graphics.Color object (verified against the developer.android.com
+     * reference + the android-36 SDK stub via javap on 2026-10-25; the spec §7
+     * sketch called getMainColors(), which does not exist in the public SDK).
+     * Three or more colors enable the mesh mix; fewer disable it.
+     */
     fun setWallpaperColors(colors: WallpaperColors?) {
-        val mains = try { colors?.mainColors } catch (t: Throwable) { null } ?: emptyList()
-        palette = mains.take(3).map { col ->
-            floatArrayOf(Color.red(col) / 255f, Color.green(col) / 255f, Color.blue(col) / 255f)
+        val mains = try {
+            listOfNotNull(
+                colors?.primaryColor,
+                colors?.secondaryColor,
+                colors?.tertiaryColor
+            )
+        } catch (t: Throwable) {
+            null
+        } ?: emptyList()
+        palette = mains.map { col ->
+            floatArrayOf(
+                col.red() / 255f,
+                col.green() / 255f,
+                col.blue() / 255f
+            )
         }
         meshStrength = if (palette.size >= 3) 1f else 0f
     }
 
     // ---------------------------------------------------------------- effect
 
-    fun buildAtmosphereRenderEffect(width: Float, height: Float, fraction: Float, settled: Boolean): RenderEffect? {
+    /**
+     * Build the composed effect for the current fraction: warm UV warp mesh (inner)
+     * + blur (outer); the settled flag switches the radius source. Returns null when
+     * no effect is needed (fraction ~0) so the caller can clear its RenderEffect.
+     */
+    fun buildAtmosphereRenderEffect(
+        width: Float,
+        height: Float,
+        fraction: Float,
+        settled: Boolean
+    ): RenderEffect? {
         if (fraction <= 0.005f) return null
 
         val peak = if (settled) settledBlurRadius else peakBlurRadius
@@ -381,23 +423,33 @@ class NothingAtmosphereEngine {
             shader.setFloatUniform("progress", fraction)
             shader.setFloatUniform("seedOffset", activeX, activeY)
             shader.setFloatUniform("swirlAngle", currentSwirlAngle)
-            val b0 = paletteBlob0; val b1 = paletteBlob1; val b2 = paletteBlob2
-            shader.setFloatUniform("meshStrength", meshStrength)
+            val b0 = paletteBlob0
+            val b1 = paletteBlob1
+            val b2 = paletteBlob2
+            shader.setFloatUniform("meshStrength", meshStrength * meshStrengthScale)
             shader.setFloatUniform("blobColor0", b0[0], b0[1], b0[2])
-            shader.setFloatUniform("blobPos0", b0[3], b0[4]); shader.setFloatUniform("blobRad0", b0[5])
+            shader.setFloatUniform("blobPos0", b0[3], b0[4])
+            shader.setFloatUniform("blobRad0", b0[5])
             shader.setFloatUniform("blobColor1", b1[0], b1[1], b1[2])
-            shader.setFloatUniform("blobPos1", b1[3], b1[4]); shader.setFloatUniform("blobRad1", b1[5])
+            shader.setFloatUniform("blobPos1", b1[3], b1[4])
+            shader.setFloatUniform("blobRad1", b1[5])
             shader.setFloatUniform("blobColor2", b2[0], b2[1], b2[2])
-            shader.setFloatUniform("blobPos2", b2[3], b2[4]); shader.setFloatUniform("blobRad2", b2[5])
+            shader.setFloatUniform("blobPos2", b2[3], b2[4])
+            shader.setFloatUniform("blobRad2", b2[5])
         }
 
-        val blurEffect = RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.MIRROR)
+        val blurEffect = RenderEffect.createBlurEffect(
+            blurRadius, blurRadius, Shader.TileMode.MIRROR
+        )
 
         val meshEffect = atmosphereShader
             ?.let { RenderEffect.createRuntimeShaderEffect(it, "inputShader") }
-            ?: RenderEffect.createBlurEffect(blurRadius * 1.05f, blurRadius * 1.05f, Shader.TileMode.MIRROR)
+            ?: RenderEffect.createBlurEffect(
+                blurRadius * 1.05f, blurRadius * 1.05f, Shader.TileMode.MIRROR
+            )
 
-        // Chain: warp UVs into fluid blobs (inner) → diffuse (outer). Falls back to stronger blur w/o AGSL.
+        // Chain: warp UVs into fluid blobs (inner) → diffuse (outer).
+        // Falls back to stronger blur w/o AGSL.
         return RenderEffect.createChainEffect(blurEffect, meshEffect)
     }
 
@@ -424,7 +476,9 @@ class NothingAtmosphereEngine {
                 }
             }
             addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) = run { targetView.setRenderEffect(null) }
+                override fun onAnimationEnd(animation: Animator) {
+                    targetView.setRenderEffect(null)
+                }
             })
             start()
         }
@@ -433,7 +487,10 @@ class NothingAtmosphereEngine {
     /** Continuous driver for View mode (e.g. shade-expansion progress). */
     fun applyViewFraction(targetView: View?, fraction: Float) {
         if (targetView == null) return
-        if (fraction <= 0.01f) { targetView.setRenderEffect(null); return }
+        if (fraction <= 0.01f) {
+            targetView.setRenderEffect(null)
+            return
+        }
         try {
             targetView.setRenderEffect(
                 buildAtmosphereRenderEffect(
@@ -442,23 +499,33 @@ class NothingAtmosphereEngine {
                     fraction, settled = false
                 )
             )
-        } catch (t: Throwable) { targetView.setRenderEffect(null) }
+        } catch (t: Throwable) {
+            targetView.setRenderEffect(null)
+        }
     }
 
     // ---------------------------------------------------------------- Surface mode
 
+    /**
+     * Draw ONE frame in Surface mode: (re)bind the surface when needed, install the
+     * current-fraction effect chain, submit non-blocking (VSYNC-paced, 120 Hz friendly).
+     */
     fun renderFrame(surface: Surface, bitmap: Bitmap, width: Int, height: Int, fraction: Float) {
         if (!surface.isValid || bitmap.isRecycled) return
         if (fraction <= 0f && currentFraction <= 0f) return   // nothing to do while locked/sharp
 
-        if (boundSurface != surface || contentNode == null || width != cachedWidth || height != cachedHeight) {
+        if (boundSurface != surface || contentNode == null ||
+            width != cachedWidth || height != cachedHeight
+        ) {
             bindSurfaceAndBitmap(surface, bitmap, width, height)
         }
         val node = contentNode ?: return
         val renderer = hardwareRenderer ?: return
 
         node.setRenderEffect(
-            buildAtmosphereRenderEffect(width.toFloat(), height.toFloat(), fraction, settled = false)
+            buildAtmosphereRenderEffect(
+                width.toFloat(), height.toFloat(), fraction, settled = false
+            )
         )
         renderer.createRenderRequest()
             .setWaitForPresent(false)      // non-blocking → VSYNC-paced, 120 Hz friendly
@@ -477,7 +544,8 @@ class NothingAtmosphereEngine {
                 setLightSourceGeometry(0f, 0f, 0f, 0f)
             }
         }
-        cachedWidth = width; cachedHeight = height
+        cachedWidth = width
+        cachedHeight = height
         val node = RenderNode("AtmosphereWallpaperNode").apply {
             setPosition(0, 0, width, height)
         }
@@ -491,19 +559,23 @@ class NothingAtmosphereEngine {
     }
 
     fun releaseSurfaceResources() {
-        surfaceAnimator?.cancel(); surfaceAnimator = null
+        surfaceAnimator?.cancel()
+        surfaceAnimator = null
         hardwareRenderer?.destroy()
         hardwareRenderer = null
         contentNode = null
         boundSurface = null
-        cachedWidth = 0; cachedHeight = 0
+        cachedWidth = 0
+        cachedHeight = 0
     }
 
-    /** Called when the display turns off / the wallpaper surface is hidden (AOD, fullscreen apps). */
+    /** Called when the display turns off / the wallpaper surface is hidden
+     *  (AOD, fullscreen apps). */
     fun setScreenActive(active: Boolean) {
         if (!active) {
             surfaceAnimator?.cancel()
-            releaseSurfaceResources()   // frees the GPU renderer while invisible; rebinds on next frame
+            // Frees the GPU renderer while invisible; rebinds on the next frame.
+            releaseSurfaceResources()
         }
     }
 
@@ -549,7 +621,8 @@ class NothingAtmosphereEngine {
         }
     }
 
-    /** Settle: persist a cheaper idle state + measure present cost once per unlock, auto-tune radius. */
+    /** Settle: persist a cheaper idle state + measure present cost once per unlock,
+     *  auto-tune radius. */
     private fun settleAfterUnlock(surface: Surface, bitmap: Bitmap, width: Int, height: Int) {
         mainHandler.post {
             val node = contentNode ?: return@post
@@ -557,15 +630,21 @@ class NothingAtmosphereEngine {
             if (!surface.isValid || currentFraction <= 0.01f) return@post
 
             node.setRenderEffect(
-                buildAtmosphereRenderEffect(width.toFloat(), height.toFloat(), 1f, settled = true)
+                buildAtmosphereRenderEffect(
+                    width.toFloat(), height.toFloat(), 1f, settled = true
+                )
             )
             val t0 = SystemClock.elapsedRealtime()
-            renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()   // blocking, ONCE per unlock
+            renderer.createRenderRequest()
+                .setWaitForPresent(true)
+                .syncAndDraw()   // blocking, ONCE per unlock
             val presentMs = SystemClock.elapsedRealtime() - t0
 
             if (presentMs > 22L && peakBlurRadius > 55f) {
                 peakBlurRadius = (peakBlurRadius * 0.6f).coerceAtLeast(55f)
-                android.util.Log.i(TAG, "Auto-tuned peakBlurRadius -> $peakBlurRadius (present=$presentMs ms)")
+                android.util.Log.i(
+                    TAG, "Auto-tuned peakBlurRadius -> $peakBlurRadius (present=$presentMs ms)"
+                )
             }
         }
     }
@@ -592,11 +671,32 @@ dependencies {
 
 > The upstream project renamed **YukiHookAPI → YukiHook** (see §3); these exact coordinates remain valid, but the renamed project's newer rewrite uses different entry-point APIs — stay on 1.2.1 for the code below, or port §8.3 when you upgrade deliberately.
 
+**Build-time deltas found when the module was first materialized (2026-10-25, all verified by the compiling build):**
+
+- YukiHookAPI 1.2.1's `api` artifact declares its AndroidX deps `compileOnly` and its KSP processor emits `androidx.annotation.Keep` into generated sources — add `implementation("androidx.annotation:annotation:1.9.1")` or the annotation is unresolved at compile time.
+- Yuki 1.2.1 transitively requires `com.github.tiann:FreeReflection:3.2.0`, which lives only on **JitPack** — add `maven("https://jitpack.io")` (group-scoped `com.github.tiann`).
+- The official Xposed repo `https://api.xposed.info/` is dead (DNS hijack as of 2026-10-25): `de.robv.android.xposed:api:82` is currently hosted at `https://artifactory.appodeal.com/appodeal-public/` (mirror listed by mvnrepository for that exact artifact, pom+jar verified).
+- The Nix-flake dev SDK ships build-tools 36.0.0 only; pin `buildToolsVersion = "36.0.0"` (AGP's default 35.0.0 cannot self-install into the read-only store).
+
 ### 8.2 Scope
 
 In the Vector/LSPosed manager, scope the module to **`com.android.systemui`** only. Do not request other apps. (Optionally add manifest meta-data `xposedscope` = `com.android.systemui` so the scope is pre-selected.)
 
 ### 8.3 `HookEntry.kt` — full, verified-anchor version
+
+> **API-truth note (2026-10-25).** The sketch below was written against a phantom API:
+> `resolve().firstMethodOrNull { … }` (and `firstFieldOrNull`) does **not exist** in YukiHookAPI
+> 1.2.1 — the 1.2.x adapter APIs are the finder form `"FQCN".toClassOrNull()?.method { name = …;
+> param(…) }.hook { after/replaceAny { … } }` with `result { onNoSuchMemberFailure { … } }`
+> carrying the NOT-FOUND logging [verified: YukiHookAPI tag 1.2.1 sources —
+> `ReflectionFactory.kt`, `PackageParam.kt`, `HookParam.kt`, `YukiMemberHookCreator`, migration
+> doc `move-to-api-1-2-x.md`; fetched 2026-10-25]. The module's `HookEntry.kt` implements the
+> identical anchors through that verified form; every member name below (§5 anchors) stands
+> unchanged. Two further translations applied at that rewrite: `mScrimBehind` is read by plain
+> fail-open reflection (no 1.2.1 finder-style field accessor), and the wildcard
+> `hook.factory.*` import is expanded to named imports (`configs`, `encase`, `method`) per the
+> adopted style guide's no-wildcard rule. Key reads go through the module's `AtmosphereKeys`
+> single source (§8.8) instead of the local `SETTING_KEY` const shown here.
 
 ```kotlin
 package dev.pong.evo.atmosphere.hook
@@ -867,11 +967,11 @@ The primary place you select/enable the effect: the **module app's own screen**,
 | --- | --- | --- |
 | `nothing_atmosphere_unlock_enabled` | 1 | Master — the screen's main toggle writes 0/1 only. |
 | `nothing_atmosphere_peak_radius` | 110 | §7 auto-tune (floor 55) still governs; knob feeds the existing `peakBlurRadius`. |
-| `nothing_atmosphere_settled_radius` | 28 | The one engine edit: `settledBlurRadius` const → runtime field (§7), clamped by R7's documented limits. |
+| `nothing_atmosphere_settled_radius` | 28 | The one engine edit: `settledBlurRadius` const → runtime field (§7). Host clamp **1–100**: the upper bound is idle-cost-guard headroom (R7); the lower bound protects the engine's `(fraction * peak).coerceIn(0.5f, peak)` — a radius under 0.5 would throw `IllegalArgumentException` and crash the transition. |
 | `nothing_atmosphere_unlock_duration_ms` | 720 | Feeds the existing per-direction `durationMs` surface. |
 | `nothing_atmosphere_lock_duration_ms` | 450 | Same. |
-| `nothing_atmosphere_mesh_strength` | 1.0 | Feeds the existing `meshStrength` uniform. |
-| `nothing_atmosphere_easing_preset` | 0 | Preset index (0 = spec curve), picked at animation start; does not preclude the later "easing asymmetry" per-direction split. |
+| `nothing_atmosphere_mesh_strength` | 1.0 | Feeds the existing `meshStrength` uniform through the engine's companion multiplier `meshStrengthScale` (§7, added with this surface — the uniform had no host-pushable channel); 0 = mesh off, > 1 exaggerates. Stored as a string ("1.00") because `Settings.System` float put/get are not public API; read via `getString()?.toFloatOrNull()`. |
+| `nothing_atmosphere_easing_preset` | 0 | Preset index (0 = spec curve), picked at animation start; does not preclude the later "easing asymmetry" per-direction split. Only preset 0 ships in v1 — any non-zero value fails open to 0 with a one-time WARN in `EvoAtmo` (the engine's `nothingInterpolator` is the one installed curve); the screen shows the preset as a fixed read-only note row. |
 
 - **What the surface never does.** Never sets or changes a wallpaper (no `WallpaperManager` write from the app — the engine is wallpaper-agnostic; changing wallpapers stays the system picker's job); never writes EvoX-blur keys or any other app's state; no per-unlock writes (R6); no Monet/`WallpaperColors` churn. The effect is fully independent of EvoX's own wallpaper blur (FIX-001 lane): the screen carries a hint suggesting the stock blur be disabled for the pure Nothing look — no cross-wiring.
 - **Toggle-off parity (mandatory, §6).** Four paths — screen toggle OFF, `adb settings put` 0, Vector module off, uninstall — each leaves stock EvoX behavior; the screen coming or going affects nothing at boot.

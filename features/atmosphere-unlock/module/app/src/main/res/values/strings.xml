@@ -1,0 +1,26 @@
+<!-- Atmosphere selection surface strings (spec §8.8). App label keeps the
+     literal text the module is already registered under in Vector. -->
+<resources>
+    <string name="app_label">EvoAtmo — Atmosphere unlock</string>
+    <string name="atmosphere_screen_label">Atmosphere</string>
+
+    <string name="atmosphere_title">Atmosphere unlock</string>
+    <string name="atmosphere_status_writable">Write access granted — controls are live.</string>
+    <string name="atmosphere_status_read_only">Read-only: allow this app to modify system settings to enable the controls.</string>
+    <string name="atmosphere_manage_button">Allow modifying system settings</string>
+
+    <string name="atmosphere_master_label">Atmosphere unlock effect</string>
+    <string name="atmosphere_peak_title">Peak blur radius</string>
+    <string name="atmosphere_settled_title">Settled blur radius</string>
+    <string name="atmosphere_unlock_title">Unlock duration</string>
+    <string name="atmosphere_lock_title">Lock duration</string>
+    <string name="atmosphere_mesh_title">Mesh strength</string>
+    <string name="atmosphere_easing_title">Easing preset</string>
+    <string name="atmosphere_easing_note">Preset 0 — Nothing curve (spec). Other values fall back to 0.</string>
+
+    <string name="atmosphere_hint">Runs independently of the Evolution X wallpaper blur — turn the stock blur off for the pure Nothing look. This screen changes only Atmosphere settings keys; it never changes your wallpaper.</string>
+
+    <string name="atmosphere_value_px">%1$d px</string>
+    <string name="atmosphere_value_ms">%1$d ms</string>
+    <string name="atmosphere_value_percent">%1$d%%</string>
+</resources>

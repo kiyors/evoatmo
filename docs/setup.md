@@ -218,9 +218,18 @@ Repositories (project-level), per the 1.x-era docs: [verified: Wayback quick-sta
 repositories {
     google()
     mavenCentral()
-    // REQUIRED as an Xposed module — serves de.robv.android.xposed:api:82
-    maven("https://api.xposed.info/") {
-        content { includeGroup("de.robv.android.xposed") }   // filter verified in current docs
+    // REQUIRED as an Xposed module — serves de.robv.android.xposed:api:82.
+    // The originally-documented official repo https://api.xposed.info/ is DEAD as of
+    // 2026-10-25 (DNS resolves to an unrelated IP; connections time out) — the artifact
+    // (pom+jar verified) currently lives on the public Appodeal Artifactory mirror that
+    // mvnrepository lists for this exact coordinate.
+    maven("https://artifactory.appodeal.com/appodeal-public/") {
+        content { includeGroup("de.robv.android.xposed") }
+    }
+    // REQUIRED — YukiHookAPI 1.2.1 transitively pulls com.github.tiann:FreeReflection,
+    // published only on JitPack [verified: first on-disk resolution failure — 2026-10-25].
+    maven("https://jitpack.io") {
+        content { includeGroup("com.github.tiann") }
     }
     // Optional fallbacks the docs list:
     // maven("https://s01.oss.sonatype.org/content/repositories/releases/")   // 1.x-era backup
@@ -228,6 +237,13 @@ repositories {
 }
 // CRITICAL (verified): api and ksp-xposed versions must match one-to-one.
 ```
+
+**Further deltas proven by the first real build of the module (2026-10-25, assembleDebug green on this exact set):**
+
+- Add `implementation("androidx.annotation:annotation:1.9.1")` — YukiHookAPI's `api` artifact keeps its own AndroidX deps `compileOnly`, and its KSP processor emits `androidx.annotation.Keep` into the generated sources; without this pin the annotation is unresolved [verified: compiler error → fix → green].
+- Set `android.useAndroidX=true` in `gradle.properties` — the Yuki `api` artifact carries AndroidX transitive dependencies (appcompat, preference-ktx), and `checkDebugAarMetadata` fails without it [verified: AGP error → fix → green].
+- Pin `buildToolsVersion = "36.0.0"` in the `android {}` block — the Nix-flake dev SDK (flake.nix) ships build-tools 36.0.0 only, and AGP's default (35.0.0) cannot be self-installed into the read-only store [verified: SDK install failure → pin → green].
+- `minSdk`/`targetSdk` must sit inside `defaultConfig {}` (not directly in `android {}`) — the bootstrap draft had them at the wrong level and the build script itself failed to compile [verified: KtDSL unresolved-reference → fix → green].
 
 KSP plugin wiring (`id("com.google.devtools.ksp") version "<ksp-version>"`, matching the KSP release to your Kotlin from <https://github.com/google/ksp/releases>) is documented in both the 1.x-era and current docs [verified: Wayback quick-start capture — 2026-10-24] [verified: https://highcapable.github.io/YukiHook/en/library/yukihook-compiler.html — 2026-10-24].
 
