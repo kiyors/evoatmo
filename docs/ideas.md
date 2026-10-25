@@ -167,12 +167,12 @@ Note: escalation math — per transition, tick deltas > ~2× the 120 Hz cadence 
 
 | Field          | Detail |
 | -------------- | ------ |
-| **What**       | A selection experience that makes the Atmosphere unlock effect reachable and selectable the Nothing-OS way. The exact surface is the open decision: an entry inside EvoX's "Wallpaper & style", the specced Evolver panel, a module-own surface, or a combination. |
-| **Why it fits Pong + Evolution X** | Today the only specced control is the raw `Settings.System` key; EvoX's own blur UX forces the same behavior on both lock and home (Stream-A board: FIX-001) and offers nothing like Nothing OS's atmosphere selection. |
-| **How**        | The decision flow is charted on the GitHub wayfinder map — [Map: select the Atmosphere unlock effect the Nothing-OS way (EvoX/Pong)](https://github.com/kiyors/evoatmo/issues/1) (research tickets feed the entry-surface decision, then engine/config deltas, then a decision-locked spec written back into this suite). Any picker hook is a new surface: §9.6 verify-first gate before code (R2/R4); atmosphere effect only; personal-first. |
-| **New keys**   | None decided yet — the delta list lands with the entry-surface/engine-delta decisions (key registry updated there). |
-| **Difficulty** | TBD with the chosen surface: T0 (Evolver panel only), T1–T2 (picker-injected claims). |
-| **Risks touched** | R2, R4 (a new surface must fail open; boot-safety is the hard gate). |
+| **What**       | The selection experience is locked (2026-10-25, wayfinder): the module app owns an **Atmosphere screen** (effect ON/OFF + engine knobs) and claims `ACTION_SET_WALLPAPER`, so it lists itself under Settings → Wallpaper (hub) and the AOSP-fork picker's third-party category — no picker hooks, and selection never sets or changes the wallpaper. The Google-prebuilt long-press path may not list the module screen (`[VERIFY: runtime]`) — accepted. |
+| **Why it fits Pong + Evolution X** | Today the only specced control is the raw `Settings.System` key; EvoX's own blur UX forces the same behavior on both lock and home (Stream-A board: FIX-001) and offers nothing like Nothing OS's atmosphere selection. The module screen is the one surface that survives every picker/ROM rewrite. |
+| **How**        | Locked by the wayfinder decision: [Decide: the entry surface for selecting the effect](https://github.com/kiyors/evoatmo/issues/4). Research in branches `research/evox-wallpaper-style-picker` and `research/atmo-engine-reference`: the visible picker is Google's closed prebuilt (can't pass the §9.6 gate — injection rejected); the hub listing is manifest-only (source-verified); Atmo Engine is reference-only. Independent of EvoX blur (hint line only); v1 = toggle + knobs, no in-app preview. |
+| **New keys**   | The surface drives the existing `nothing_atmosphere_unlock_enabled`; the knob list (adopt/trim/extend) is the engine-delta decision — [Decide: engine/config deltas for the chosen surface](https://github.com/kiyors/evoatmo/issues/5). |
+| **Difficulty** | T1 · low–medium — one new app surface, zero new hooks. |
+| **Risks touched** | R2, R4 (nothing hooks foreign UI; the screen carries no boot-relevant risk). |
 
 ## 4. T2 — Bigger Engineering
 
@@ -243,7 +243,7 @@ Note: memo contents before any code — model source + runtime size, wall-clock 
 | 11 | Ambient breathing states      | T2   | Med    | Medium   | Med–High     | **11th** — needs R7 measurement first; VERIFY the AOD surface |
 | 12 | Lockscreen clock experiments  | T2   | High   | High     | High         | **12th** — VERIFY-first gate (Appendix A); conservative layer only |
 | 13 | On-device segmentation        | T3   | High   | Research | High         | **13th** — feasibility memo, then reuse #9's plumbing |
-| 14 | Atmosphere selection surface  | TBD (wayfinder map) | TBD | TBD | Med (VERIFY gate for any picker hook) | Gate on the map's entry-surface decision; card in §3 above |
+| 14 | Atmosphere selection surface  | T1   | High   | Low–Med  | Low          | Surface locked (wayfinder, module screen + hub listing) — spec via map |
 
 ### Dependency quick-map
 
