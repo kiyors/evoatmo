@@ -272,6 +272,9 @@ Run after every module change (Stage 1) and after every Stage-3 deploy. Rows 1�
 | 11 | Fingerprint unlock vs. swipe-up unlock | both count as "every unlock" (spec §1; both paths hit the verified unlock trigger V2) | both fire; seed logged per unlock (the seed logging behind R11) |
 | 12 | Toggle mid-animation (flip `…enabled` while the 720 ms transition runs) | fail-open holds (spec §6.7) | the in-flight transition completes; the **next** unlock respects the new state; `-b crash` stays empty |
 | 13 | Cold reboot in airplane mode (no ADB available) | cold-start survival with no rescue channel: module persists, effect fires, launcher reachable | zero host interaction needed; if it doesn't come back, §1.3 Safe Mode is the only recourse — dry-running that path is the point |
+| 14 | Atmosphere screen first run (spec §8.8) | first write attempt offers the stock "Modify system settings" grant; pre-grant the screen is read-only + hint | write works after the one-time grant, no root, no Vector coupling (reads never needed permission) |
+| 15 | Wallpaper-adjacent listing (spec §8.8) | Settings → Wallpaper hub lists the Atmosphere entry; launcher icon opens it | entry opens the screen; `[VERIFY runtime]` whether Google's prebuilt long-press flow lists it — artifact to `assets/qa/<buildID>/` |
+| 16 | Knob recipes (spec §8.8 keys) | each of the seven keys applies at the next transition (radius/durations/mesh/easing) | auto-tune floor still caps peak; settled stays clamped (R7); master-off = stock regardless of knobs |
 
 ## 6. Failure Playbook
 

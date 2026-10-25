@@ -13,3 +13,5 @@ risks): `docs/engineering_specification.md` (§7 = engine, §8 = Stage-1 module,
 | `overlay/` | deferred (Stage 3) | Systemless overlay packaging of a remade SystemUI; platform-key signed; never onto CI-signed ROMs (risk R1) |
 
 QA dumps go to `assets/qa/<buildID>/` in this repo.
+
+The **selection surface** (how you turn the effect on) is decision-locked and specced: the module app's own Atmosphere screen + manifest-based system listing — spec **§8.8** (wayfinder map: kiyors/evoatmo#1). No hooks, no preview in v1; keys adopted from the ideas.md registry.

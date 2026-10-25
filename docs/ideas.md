@@ -245,7 +245,7 @@ Note: memo contents before any code — model source + runtime size, wall-clock 
 | 11 | Ambient breathing states      | T2   | Med    | Medium   | Med–High     | **11th** — needs R7 measurement first; VERIFY the AOD surface |
 | 12 | Lockscreen clock experiments  | T2   | High   | High     | High         | **12th** — VERIFY-first gate (Appendix A); conservative layer only |
 | 13 | On-device segmentation        | T3   | High   | Research | High         | **13th** — feasibility memo, then reuse #9's plumbing |
-| 14 | Atmosphere selection surface  | T1   | High   | Low–Med  | Low          | Surface locked (wayfinder, module screen + hub listing) — spec via map |
+| 14 | Atmosphere selection surface  | T1   | High   | Low–Med  | Low          | **Spec'd** (spec §8.8, build-ready) — module screen + manifest hub listing |
 
 ### Dependency quick-map
 

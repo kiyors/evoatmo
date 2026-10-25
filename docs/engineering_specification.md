@@ -230,8 +230,11 @@ class NothingAtmosphereEngine {
         /** Peak Gaussian radius during the unlock transition. Auto-tuned down by the present-time guard. */
         var peakBlurRadius = 110f
 
-        /** Radius kept alive while settled on the home screen (idle GPU cost guard). */
-        const val settledBlurRadius = 28f
+        /** Radius kept alive while settled on the home screen (idle GPU cost guard).
+         *  Runtime-tunable via `nothing_atmosphere_settled_radius` (spec §8.8) since the
+         *  selection-surface decision opened it — must stay clamped; the idle-cost guard
+         *  itself is unchanged (host reads the key and clamps before pushing). */
+        var settledBlurRadius = 28f
 
         private const val TAG = "EvoAtmo"
     }
@@ -851,6 +854,37 @@ private fun loadForegroundCutout(): Bitmap? = appContext?.let {
 ### 8.7 Runtime toggle (no reinstall)
 
 → The live `adb shell settings put system nothing_atmosphere_unlock_enabled 1|0` switch and the full command cheat sheet live in **[`operations.md`](operations.md) §2/§7**. The module reads the key at runtime (§6 principle 6), so toggling needs no reinstall.
+
+### 8.8 Atmosphere Selection Surface (module app screen — decision-locked)
+
+The primary place you select/enable the effect: the **module app's own screen**, not a foreign picker UI. Locked 2026-10-25 by the wayfinder effort ([map: select the Atmosphere unlock effect the Nothing-OS way — kiyors/evoatmo#1]{decisions #4 entry-surface + #5 engine/config deltas}; research branches `research/evox-wallpaper-style-picker`, `research/atmo-engine-reference`). This surface adds **no hooks at all** — the V1–V12 matrix and the §8.2 Vector scope (`com.android.systemui` only) are unchanged; the screen is ordinary module-app UI over public APIs.
+
+- **Entry paths.** (1) The module launcher icon — always available. (2) Manifest-only wallpaper listings: the module app claims `android.intent.action.SET_WALLPAPER`, so it appears on EvoX's Settings → Wallpaper hub page (which dynamically lists every installed app answering that action) and in the AOSP-fork picker's third-party app category [verified: research branch `research/evox-wallpaper-style-picker`, memo A.4/A.6 — EvoX `packages_apps_Settings` @ `cnb` (`WallpaperTypePreferenceController`), fork `DefaultCategoryProvider` — 2026-10-25]. Whether Google's presigned `WallpaperPickerGoogleRelease` (the long-press-home picker on GMS builds) lists it is closed source: `[VERIFY runtime — per §9.6, dumper/pm evidence stamped by build]`. Accepted limitation, not a gap: the icon path survives any picker rewrite.
+- **The screen writes only `Settings.System` keys.** Public API, no root, no Vector coupling: a normal app reading system settings needs no permission; *writing* requires declaring `Manifest.permission.WRITE_SETTINGS` **and** a user grant via `Settings.ACTION_MANAGE_WRITE_SETTINGS` [verified: developer.android.com `Settings.System.canWrite`, API 23+ — fetched 2026-10-25]. Pre-grant the screen renders read-only state + a one-line hint; `adb` (ops §7) keeps full authority regardless.
+- **Keys adopted (decision-locked 2026-10-25; §9.2 naming; read at runtime per §6.6 — change applies at the next transition):**
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `nothing_atmosphere_unlock_enabled` | 1 | Master — the screen's main toggle writes 0/1 only. |
+| `nothing_atmosphere_peak_radius` | 110 | §7 auto-tune (floor 55) still governs; knob feeds the existing `peakBlurRadius`. |
+| `nothing_atmosphere_settled_radius` | 28 | The one engine edit: `settledBlurRadius` const → runtime field (§7), clamped by R7's documented limits. |
+| `nothing_atmosphere_unlock_duration_ms` | 720 | Feeds the existing per-direction `durationMs` surface. |
+| `nothing_atmosphere_lock_duration_ms` | 450 | Same. |
+| `nothing_atmosphere_mesh_strength` | 1.0 | Feeds the existing `meshStrength` uniform. |
+| `nothing_atmosphere_easing_preset` | 0 | Preset index (0 = spec curve), picked at animation start; does not preclude the later "easing asymmetry" per-direction split. |
+
+- **What the surface never does.** Never sets or changes a wallpaper (no `WallpaperManager` write from the app — the engine is wallpaper-agnostic; changing wallpapers stays the system picker's job); never writes EvoX-blur keys or any other app's state; no per-unlock writes (R6); no Monet/`WallpaperColors` churn. The effect is fully independent of EvoX's own wallpaper blur (FIX-001 lane): the screen carries a hint suggesting the stock blur be disabled for the pure Nothing look — no cross-wiring.
+- **Toggle-off parity (mandatory, §6).** Four paths — screen toggle OFF, `adb settings put` 0, Vector module off, uninstall — each leaves stock EvoX behavior; the screen coming or going affects nothing at boot.
+- **Explicitly not in v1** (future idea rows, deliberately out): in-app preview (static or live), Quick Settings tile, per-screen keys, effect variants beyond Atmosphere.
+
+**Acceptance checklist for the build session** (extends ops §5; evidence to `assets/qa/<buildID>/` stamped by fingerprint per §9.6):
+
+1. Pre-flight ritual (ops §1) then the hot-reload install (ops §2); crash gate (`adb logcat -b crash`) empty.
+2. Launcher icon opens the screen; Settings → Wallpaper lists the Atmosphere entry — first-build `[VERIFY runtime]` (screenshot + `dumpsys`/`pm` artifacts).
+3. Grant flow: first write attempt offers the stock "Modify system settings" screen; pre-grant state is read-only + hint, no crash.
+4. Seven `adb shell settings put system …` recipes behave per the keys table (radius/duration/mesh/easing appear at the next transition; auto-tune floor still caps peak; settled stays clamped).
+5. Parity: screen toggle OFF / `adb` 0 / Vector off → stock behavior (extends ops §5 rows 5 & 12 with the screen path); wallpaper untouched throughout.
+6. `[VERIFY runtime]` build-stage evidence: whether the Google prebuilt's flow lists the entry; visual interplay of the morph with EvoX blur when both enabled (the map's last fog item — hint line is the shipped contract; any beyond-hint behavior is unmapped).
 
 ---
 
