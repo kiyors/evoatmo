@@ -44,9 +44,9 @@ flowchart LR
 
 | ID | What annoys me (symptom, one line) | Component guess | Cheapest kill? | Status | Build-ID last touched | Folder | Upstream PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — | — | — |
+| FIX-001 | Wallpaper blur only behaves if enabled on BOTH lock and home screens (The Evolver → theme → wallpaper); enabling one screen alone changes nothing | Evolver (wallpaper blur prefs) | — | captured | — | — | — |
 
-*(Deliberately empty — the first real annoyance becomes `FIX-001` and gets a folder.)*
+*(Board is live: FIX-001 captured 2026-10-25 from the wallpaper-blur UX annoyance. Keep appending rows — the 10-second habit; folders get slugged on triage.)*
 
 ## Per-finding folder template (copy on triage)
 
