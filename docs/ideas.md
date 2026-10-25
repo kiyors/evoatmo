@@ -163,6 +163,17 @@ Note: escalation math — per transition, tick deltas > ~2× the 120 Hz cadence 
 | **Difficulty** | T1 · medium — engine change is small; the VERIFY gate is the unknown. |
 | **Risks touched** | R6-safe (visual-only), R7 (per-frame uniform writes only), R8 (paused/off → fall back to wallpaper palette). |
 
+### Idea: Atmosphere Selection Surface (Nothing-OS-style entry)
+
+| Field          | Detail |
+| -------------- | ------ |
+| **What**       | A selection experience that makes the Atmosphere unlock effect reachable and selectable the Nothing-OS way. The exact surface is the open decision: an entry inside EvoX's "Wallpaper & style", the specced Evolver panel, a module-own surface, or a combination. |
+| **Why it fits Pong + Evolution X** | Today the only specced control is the raw `Settings.System` key; EvoX's own blur UX forces the same behavior on both lock and home (Stream-A board: FIX-001) and offers nothing like Nothing OS's atmosphere selection. |
+| **How**        | The decision flow is charted on the GitHub wayfinder map — [Map: select the Atmosphere unlock effect the Nothing-OS way (EvoX/Pong)](https://github.com/kiyors/evoatmo/issues/1) (research tickets feed the entry-surface decision, then engine/config deltas, then a decision-locked spec written back into this suite). Any picker hook is a new surface: §9.6 verify-first gate before code (R2/R4); atmosphere effect only; personal-first. |
+| **New keys**   | None decided yet — the delta list lands with the entry-surface/engine-delta decisions (key registry updated there). |
+| **Difficulty** | TBD with the chosen surface: T0 (Evolver panel only), T1–T2 (picker-injected claims). |
+| **Risks touched** | R2, R4 (a new surface must fail open; boot-safety is the hard gate). |
+
 ## 4. T2 — Bigger Engineering
 
 ### Idea: Lockscreen Clock / Widget Experiments
@@ -232,6 +243,7 @@ Note: memo contents before any code — model source + runtime size, wall-clock 
 | 11 | Ambient breathing states      | T2   | Med    | Medium   | Med–High     | **11th** — needs R7 measurement first; VERIFY the AOD surface |
 | 12 | Lockscreen clock experiments  | T2   | High   | High     | High         | **12th** — VERIFY-first gate (Appendix A); conservative layer only |
 | 13 | On-device segmentation        | T3   | High   | Research | High         | **13th** — feasibility memo, then reuse #9's plumbing |
+| 14 | Atmosphere selection surface  | TBD (wayfinder map) | TBD | TBD | Med (VERIFY gate for any picker hook) | Gate on the map's entry-surface decision; card in §3 above |
 
 ### Dependency quick-map
 
