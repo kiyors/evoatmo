@@ -60,6 +60,8 @@ flowchart LR
 
 ### Idea: Evolver Preference Panel
 
+*(Status 2026-10-25 — wayfinder engine-delta decision: the six keys this card proposes are **adopted** by the module's Atmosphere screen (Stream-B row #14); the Evolver-native variant below stays parked for Stage-2.)*
+
 | Field          | Detail |
 | -------------- | ------ |
 | **What**       | A panel in The Evolver exposing the engine knobs that already exist: peak blur radius (`peakBlurRadius`, 110 default, auto-tune floor 55), settled radius (`settledBlurRadius`, 28), transition durations (720/450 ms unlock/lock), mesh strength (`meshStrength` uniform), easing presets. |
@@ -170,7 +172,7 @@ Note: escalation math — per transition, tick deltas > ~2× the 120 Hz cadence 
 | **What**       | The selection experience is locked (2026-10-25, wayfinder): the module app owns an **Atmosphere screen** (effect ON/OFF + engine knobs) and claims `ACTION_SET_WALLPAPER`, so it lists itself under Settings → Wallpaper (hub) and the AOSP-fork picker's third-party category — no picker hooks, and selection never sets or changes the wallpaper. The Google-prebuilt long-press path may not list the module screen (`[VERIFY: runtime]`) — accepted. |
 | **Why it fits Pong + Evolution X** | Today the only specced control is the raw `Settings.System` key; EvoX's own blur UX forces the same behavior on both lock and home (Stream-A board: FIX-001) and offers nothing like Nothing OS's atmosphere selection. The module screen is the one surface that survives every picker/ROM rewrite. |
 | **How**        | Locked by the wayfinder decision: [Decide: the entry surface for selecting the effect](https://github.com/kiyors/evoatmo/issues/4). Research in branches `research/evox-wallpaper-style-picker` and `research/atmo-engine-reference`: the visible picker is Google's closed prebuilt (can't pass the §9.6 gate — injection rejected); the hub listing is manifest-only (source-verified); Atmo Engine is reference-only. Independent of EvoX blur (hint line only); v1 = toggle + knobs, no in-app preview. |
-| **New keys**   | The surface drives the existing `nothing_atmosphere_unlock_enabled`; the knob list (adopt/trim/extend) is the engine-delta decision — [Decide: engine/config deltas for the chosen surface](https://github.com/kiyors/evoatmo/issues/5). |
+| **New keys**   | Adopted (wayfinder engine-delta decision): the six registry knobs — `nothing_atmosphere_peak_radius` (110) · `nothing_atmosphere_settled_radius` (28) · `nothing_atmosphere_unlock_duration_ms` (720) · `nothing_atmosphere_lock_duration_ms` (450) · `nothing_atmosphere_mesh_strength` (1.0) · `nothing_atmosphere_easing_preset` (0) — plus the existing master key; **no new keys**. |
 | **Difficulty** | T1 · low–medium — one new app surface, zero new hooks. |
 | **Risks touched** | R2, R4 (nothing hooks foreign UI; the screen carries no boot-relevant risk). |
 
@@ -257,18 +259,18 @@ Note: memo contents before any code — model source + runtime size, wall-clock 
 | Frame watchdog              | no idea; needs the R7 measurement habit           | Safe rollout of ambient (#11) and clock (#12)       |
 | Upstream patches            | Stage 2 proven locally on a matching ROM (§12)    | Future official builds without overlays (R1/R10)    |
 
-### Key registry (proposal-level names, all read at runtime)
+### Key registry (proposal-level names, read at runtime; the Atmosphere-screen subset is adopted — 2026-10-25)
 
 | Key                                    | Default                            | Introduced by        |
 | -------------------------------------- | ---------------------------------- | -------------------- |
-| `nothing_atmosphere_unlock_enabled`    | 1                                  | spec §6 / §9.2 (exists) |
+| `nothing_atmosphere_unlock_enabled`    | 1                                  | spec §6 / §9.2 (exists; Atmosphere screen = primary writer) |
 | `nothing_depth_foreground_enabled`     | 0                                  | spec §10 (exists)    |
-| `nothing_atmosphere_peak_radius`       | 110 (auto-tune floor 55)           | Preference panel     |
-| `nothing_atmosphere_settled_radius`    | 28                                 | Preference panel     |
-| `nothing_atmosphere_unlock_duration_ms`| 720                                | Preference panel     |
-| `nothing_atmosphere_lock_duration_ms`  | 450                                | Preference panel     |
-| `nothing_atmosphere_mesh_strength`     | 1.0                                | Preference panel     |
-| `nothing_atmosphere_easing_preset`     | 0 (spec curve)                     | Preference panel     |
+| `nothing_atmosphere_peak_radius`       | 110 (auto-tune floor 55)           | Atmosphere screen (module) |
+| `nothing_atmosphere_settled_radius`    | 28                                 | Atmosphere screen (module) |
+| `nothing_atmosphere_unlock_duration_ms`| 720                                | Atmosphere screen (module) |
+| `nothing_atmosphere_lock_duration_ms`  | 450                                | Atmosphere screen (module) |
+| `nothing_atmosphere_mesh_strength`     | 1.0                                | Atmosphere screen (module) |
+| `nothing_atmosphere_easing_preset`     | 0 (spec curve)                     | Atmosphere screen (module) |
 | `nothing_atmosphere_blur_only`         | 0 (auto-forced 1 on AGSL failure)  | Blur-only fallback   |
 | `nothing_atmosphere_seed_debug`        | 0                                  | Seed debug / freeze  |
 | `nothing_atmosphere_seed_freeze`       | 0                                  | Seed debug / freeze  |
