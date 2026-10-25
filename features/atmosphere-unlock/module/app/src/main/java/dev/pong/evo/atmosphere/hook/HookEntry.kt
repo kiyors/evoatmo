@@ -25,6 +25,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.provider.Settings
 import android.service.wallpaper.WallpaperService
+import android.util.Log
 import android.view.SurfaceHolder
 import android.view.View
 import com.android.systemui.nothing.atmosphere.NothingAtmosphereEngine
@@ -50,6 +51,12 @@ class HookEntry : IYukiHookXposedInit {
         const val SCRIM_CONTROLLER = "com.android.systemui.statusbar.phone.ScrimController"
         const val IMAGE_WALLPAPER_ENGINE = "com.android.systemui.wallpapers.ImageWallpaper" +
             "\$CanvasEngine"
+
+        // Re-anchored trigger host (this build): the ScrimController keyguard callbacks
+        // are gone; the events moved onto KeyguardUnlockAnimationController
+        // [verified: member dump 2026-10-25, EvolutionX 16.0-20260915 release keys].
+        internal const val KEYGUARD_UNLOCK_ANIMATION_CONTROLLER =
+            "com.android.systemui.keyguard.KeyguardUnlockAnimationController"
 
         /** Demo-flavor switch (spec §8.3's "PROTOTYPE_MODE"): one branch pulses the scrim
          *  View, the other owns the wallpaper Surface permanently. */
@@ -102,9 +109,17 @@ class HookEntry : IYukiHookXposedInit {
                     log("screen-off receiver registration failed — teardown guard off: $t")
                 }
 
-                // Optional member dumps during first bring-up (R4): call
-                // dumpMembers(SCRIM_CONTROLLER) and dumpMembers(IMAGE_WALLPAPER_ENGINE)
-                // here to recheck the live member lists after a ROM update.
+                // Member dumps at first bring-up (R4): recheck the live member lists
+                // after a ROM update in a single logcat read. This build migrated the
+                // keyguard/scrim triggers into interactors — dump the candidates.
+                listOf(
+                    SCRIM_CONTROLLER,
+                    KEYGUARD_UNLOCK_ANIMATION_CONTROLLER,
+                    "com.android.systemui.keyguard.KeyguardStateController",
+                    "com.android.systemui.keyguard.KeyguardStateControllerImpl",
+                    "com.android.systemui.shade.ShadeTransitionController",
+                ).forEach { dumpMembers(it) }
+                dumpMembers(IMAGE_WALLPAPER_ENGINE)
 
                 /**
                  * V2/V3/V4 — ScrimController triggers + continuous scrub driver.
@@ -223,6 +238,80 @@ class HookEntry : IYukiHookXposedInit {
                 } ?: log("$SCRIM_CONTROLLER NOT FOUND — run dumpMembers")
 
                 /**
+                 * V2/V3 — re-anchored triggers (spec row correction for this build).
+                 * EvolutionX 16.0-20260915 dropped the ScrimController keyguard
+                 * callbacks (dump evidence 2026-10-25: onKeyguardFadingAwayChanged,
+                 * onKeyguardVisibilityChanged and setTransitionToFullShadeProgress are
+                 * all absent) and moved the events onto KeyguardUnlockAnimationController.
+                 * The old ScrimController hooks above stay for other builds; on a host
+                 * without them they resolve to a single NOT-FOUND line and no writes.
+                 */
+                KEYGUARD_UNLOCK_ANIMATION_CONTROLLER.toClassOrNull()?.apply {
+
+                    // V2 — unlock trigger: keyguard going away fires the unlock morph.
+                    // Not gated on the previous state: a mis-timed fire is harmless — the
+                    // morph runs toward the settled blur and the next lock settle corrects.
+                    method {
+                        name = "onKeyguardGoingAwayChanged"
+                        emptyParam()
+                    }.hook {
+                        after {
+                            try {
+                                if (!masterEnabled()) return@after
+                                pushEngineConfig()
+                                val holder = activeSurface ?: return@after
+                                val bmp = activeBitmap ?: return@after
+                                val frame = holder.surfaceFrame
+                                (engine ?: NothingAtmosphereEngine().also { engine = it })
+                                    .animateSurfaceTransition(
+                                        holder.surface, bmp,
+                                        frame.width(), frame.height(),
+                                        true, unlockMs().toLong()
+                                    )
+                            } catch (t: Throwable) {
+                                log("V2 re-anchor hook error: $t")
+                            }
+                        }
+                    }.result {
+                        onNoSuchMemberFailure {
+                            log("onKeyguardGoingAwayChanged NOT FOUND — run dumpMembers")
+                        }
+                    }
+
+                    // V3 — lock trigger: sleep starts the settle back to sharp. Same
+                    // liveness gate as the old anchor (only settle when a morph is at
+                    // all visible); the settle is self-limiting because steady frames
+                    // fall through to the stock draw via the V5 pass-through.
+                    method {
+                        name = "onStartedGoingToSleep"
+                        emptyParam()
+                    }.hook {
+                        after {
+                            try {
+                                if (!masterEnabled()) return@after
+                                if ((engine?.currentFraction ?: 0f) <= 0.02f) return@after
+                                pushEngineConfig()
+                                val holder = activeSurface ?: return@after
+                                val bmp = activeBitmap ?: return@after
+                                val frame = holder.surfaceFrame
+                                (engine ?: NothingAtmosphereEngine().also { engine = it })
+                                    .animateSurfaceTransition(
+                                        holder.surface, bmp,
+                                        frame.width(), frame.height(),
+                                        false, lockMs().toLong()
+                                    )
+                            } catch (t: Throwable) {
+                                log("V3 re-anchor hook error: $t")
+                            }
+                        }
+                    }.result {
+                        onNoSuchMemberFailure {
+                            log("onStartedGoingToSleep NOT FOUND — run dumpMembers")
+                        }
+                    }
+                } ?: log("KeyguardUnlockAnimationController NOT FOUND — run dumpMembers")
+
+                /**
                  * V5/V6 — Wallpaper surface ownership (MORPH mode only).
                  * replaceAny on the lowest verified draw path; remaining internal paths
                  * (drawFrame/drawFrameSynchronized/drawFrameInternal) call
@@ -248,8 +337,16 @@ class HookEntry : IYukiHookXposedInit {
                                     activeBitmap = bmp
                                     if (!masterEnabled()) return@replaceAny callOriginal()
 
+                                    // §3.2 invariant: at fraction 0 the render must equal the
+                                    // stock draw. This hook owns the only stock draw (replaceAny),
+                                    // so a steady-state frame MUST fall through to the original —
+                                    // routing it into renderFrame blanks the canvas (renderFrame
+                                    // returns without painting at fraction 0). Engine paints only
+                                    // mid-transition frames.
                                     val eng = engine
                                         ?: NothingAtmosphereEngine().also { engine = it }
+                                    if (eng.currentFraction <= 0.005f) return@replaceAny callOriginal()
+
                                     val frame = holder.surfaceFrame
                                     eng.renderFrame(
                                         holder.surface, bmp,
@@ -302,6 +399,9 @@ class HookEntry : IYukiHookXposedInit {
     }
 
     private fun log(msg: String) {
+        // Double-channel: logcat carries everything for adb reads; the bridge copies
+        // into Vector's on-device log page (its XposedBridge.log relay can drop lines).
+        Log.i(TAG, msg)
         XposedBridge.log("[$TAG] $msg")
     }
 
